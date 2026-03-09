@@ -1,0 +1,19 @@
+# Asset Service - Service (ClusterIP)
+# Lab #6: Kubernetes Service for internal communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: asset-service
+  labels:
+    app: asset-service
+    tier: backend
+spec:
+  type: ClusterIP  # Internal service, not exposed externally
+  selector:
+    app: asset-service
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  sessionAffinity: None

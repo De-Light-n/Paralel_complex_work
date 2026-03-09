@@ -1,0 +1,174 @@
+version: "3.8"
+
+# Investment Portfolio Management System - Docker Compose
+# Lab #5: Containerization with Docker
+# This demonstrates microservices architecture with separate containers
+
+services:
+  # PostgreSQL Database
+  # Using single instance with multiple databases (one per service)
+  postgres:
+    image: postgres:15-alpine
+    container_name: portfolio_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - portfolio-network
+
+  # Redis Cache
+  # Used by Asset Service for caching (Lab #5 requirement)
+  redis:
+    image: redis:7-alpine
+    container_name: portfolio_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - portfolio-network
+
+  # Asset Service
+  # Manages investment assets with Redis caching
+  asset-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        SERVICE_NAME: asset-service
+    container_name: asset_service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/asset_db
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - portfolio-network
+    restart: unless-stopped
+
+  # Transaction Service
+  # Handles buy/sell operations
+  transaction-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        SERVICE_NAME: transaction-service
+    container_name: transaction_service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/transaction_db
+      ASSET_SERVICE_URL: http://asset-service:8000
+      PORTFOLIO_SERVICE_URL: http://portfolio-service:8000
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      asset-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - portfolio-network
+    restart: unless-stopped
+
+  # Portfolio Service
+  # Manages investors and their portfolios
+  portfolio-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        SERVICE_NAME: portfolio-service
+    container_name: portfolio_service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/portfolio_db
+      ASSET_SERVICE_URL: http://asset-service:8000
+    ports:
+      - "8003:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      asset-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - portfolio-network
+    restart: unless-stopped
+
+  # Analytics Service
+  # Generates reports by aggregating data from other services
+  analytics-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        SERVICE_NAME: analytics-service
+    container_name: analytics_service
+    environment:
+      ASSET_SERVICE_URL: http://asset-service:8000
+      PORTFOLIO_SERVICE_URL: http://portfolio-service:8000
+      TRANSACTION_SERVICE_URL: http://transaction-service:8000
+    ports:
+      - "8004:8000"
+    depends_on:
+      asset-service:
+        condition: service_healthy
+      portfolio-service:
+        condition: service_healthy
+      transaction-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - portfolio-network
+    restart: unless-stopped
+
+# Networks
+networks:
+  portfolio-network:
+    driver: bridge
+    name: portfolio-network
+
+# Volumes
+volumes:
+  postgres_data:
+    name: portfolio_postgres_data
