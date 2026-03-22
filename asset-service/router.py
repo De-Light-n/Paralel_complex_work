@@ -16,11 +16,16 @@ from schemas import AssetCreate, AssetUpdate, AssetResponse, AssetListResponse
 
 router = APIRouter(prefix="/assets", tags=["Assets"])
 
+async def get_db_stub():
+    pass
+
+async def get_cache_stub():
+    pass
 
 # Dependency injection
 async def get_asset_service(
-    db: AsyncSession = Depends(),
-    cache: CacheManager = Depends()
+    db: AsyncSession = Depends(get_db_stub),
+    cache: CacheManager = Depends(get_cache_stub)
 ) -> AssetService:
     """
     Dependency for injecting AssetService
@@ -145,3 +150,21 @@ async def delete_asset(
     Cache is automatically invalidated after deletion
     """
     await service.delete_asset(asset_id)
+
+
+@router.post(
+    "/cache/clear",
+    status_code=status.HTTP_200_OK,
+    summary="Clear asset cache",
+    description="Clear Redis keys for cached asset GET responses"
+)
+async def clear_asset_cache(
+    service: AssetService = Depends(get_asset_service)
+) -> dict:
+    """Manually clear cached asset entries by key pattern asset:*."""
+    deleted = await service.clear_asset_cache()
+    return {
+        "status": "ok",
+        "deleted_keys": deleted,
+        "pattern": "asset:*"
+    }

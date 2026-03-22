@@ -57,6 +57,13 @@ class PortfolioRepository:
         await self.session.flush()
         await self.session.refresh(investor)
         return investor
+
+    async def update_investor_balance(self, investor: Investor, new_balance: float) -> Investor:
+        """Update investor balance"""
+        investor.balance = new_balance
+        await self.session.flush()
+        await self.session.refresh(investor)
+        return investor
     
     # Portfolio operations
     async def get_portfolio_items(self, investor_id: int) -> List[PortfolioItem]:
@@ -105,3 +112,8 @@ class PortfolioRepository:
             await self.session.flush()
             await self.session.refresh(item)
             return item
+
+    async def delete_portfolio_item(self, item: PortfolioItem) -> None:
+        """Delete a portfolio item"""
+        await self.session.delete(item)
+        await self.session.flush()

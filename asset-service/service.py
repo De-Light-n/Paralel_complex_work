@@ -156,6 +156,12 @@ class AssetService:
         if self.cache:
             cache_key = f"{self.CACHE_PREFIX}:{asset_id}"
             await self.cache.delete(cache_key)
+
+    async def clear_asset_cache(self) -> int:
+        """Clear all cached asset records and return removed keys count."""
+        if not self.cache:
+            return 0
+        return await self.cache.clear_pattern(f"{self.CACHE_PREFIX}:*")
     
     def _asset_to_dict(self, asset: Asset) -> dict:
         """Convert Asset model to dictionary for caching"""

@@ -10,12 +10,24 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from repository import PortfolioRepository
 from service import PortfolioService
-from schemas import InvestorCreate, InvestorUpdate, InvestorResponse, PortfolioSummary
+from schemas import (
+    InvestorCreate,
+    InvestorUpdate,
+    InvestorResponse,
+    PortfolioSummary,
+    PortfolioItemWithAsset,
+    CashOperationRequest,
+    PortfolioTradeRequest,
+    PortfolioTradeResponse,
+)
 
 router = APIRouter()
 
+async def get_db_stub():
+    """Stub for database session dependency"""
+    pass
 
-async def get_portfolio_service(db: AsyncSession = Depends()) -> PortfolioService:
+async def get_portfolio_service(db: AsyncSession = Depends(get_db_stub)) -> PortfolioService:
     """Dependency for injecting PortfolioService"""
     repository = PortfolioRepository(db)
     return PortfolioService(repository)
@@ -79,6 +91,36 @@ async def update_investor(
     return await service.update_investor(investor_id, investor_data)
 
 
+@router.post(
+    "/investors/{investor_id}/deposit",
+    response_model=InvestorResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Investors"]
+)
+async def deposit_funds(
+    investor_id: int,
+    data: CashOperationRequest,
+    service: PortfolioService = Depends(get_portfolio_service)
+) -> InvestorResponse:
+    """Deposit funds to investor balance"""
+    return await service.deposit_funds(investor_id, data)
+
+
+@router.post(
+    "/investors/{investor_id}/withdraw",
+    response_model=InvestorResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Investors"]
+)
+async def withdraw_funds(
+    investor_id: int,
+    data: CashOperationRequest,
+    service: PortfolioService = Depends(get_portfolio_service)
+) -> InvestorResponse:
+    """Withdraw funds from investor balance"""
+    return await service.withdraw_funds(investor_id, data)
+
+
 @router.get(
     "/portfolio/{investor_id}",
     response_model=PortfolioSummary,
@@ -96,3 +138,62 @@ async def get_portfolio(
     Communicates with Asset Service to get current prices
     """
     return await service.get_portfolio(investor_id)
+
+
+@router.get(
+    "/portfolio/{investor_id}/holdings",
+    response_model=List[PortfolioItemWithAsset],
+    status_code=status.HTTP_200_OK,
+    tags=["Portfolio"]
+)
+async def get_holdings(
+    investor_id: int,
+    service: PortfolioService = Depends(get_portfolio_service)
+) -> List[PortfolioItemWithAsset]:
+    """Get all investor holdings with asset details"""
+    return await service.get_holdings(investor_id)
+
+
+@router.get(
+    "/portfolio/{investor_id}/holdings/{asset_id}",
+    response_model=PortfolioItemWithAsset,
+    status_code=status.HTTP_200_OK,
+    tags=["Portfolio"]
+)
+async def get_holding_details(
+    investor_id: int,
+    asset_id: int,
+    service: PortfolioService = Depends(get_portfolio_service)
+) -> PortfolioItemWithAsset:
+    """Get specific holding details for an investor asset"""
+    return await service.get_holding_by_asset(investor_id, asset_id)
+
+
+@router.post(
+    "/portfolio/{investor_id}/buy",
+    response_model=PortfolioTradeResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Portfolio"]
+)
+async def buy_asset(
+    investor_id: int,
+    trade: PortfolioTradeRequest,
+    service: PortfolioService = Depends(get_portfolio_service)
+) -> PortfolioTradeResponse:
+    """Buy asset and update portfolio position"""
+    return await service.buy_asset(investor_id, trade)
+
+
+@router.post(
+    "/portfolio/{investor_id}/sell",
+    response_model=PortfolioTradeResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Portfolio"]
+)
+async def sell_asset(
+    investor_id: int,
+    trade: PortfolioTradeRequest,
+    service: PortfolioService = Depends(get_portfolio_service)
+) -> PortfolioTradeResponse:
+    """Sell asset and update portfolio position"""
+    return await service.sell_asset(investor_id, trade)

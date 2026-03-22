@@ -1,7 +1,6 @@
 FROM python:3.11-slim
 
-# Build argument for service name
-ARG SERVICE_NAME
+ARG SERVICE_DIR
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -14,23 +13,23 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev curl && \
+    apt-get install -y --no-install-recommends gcc libpq-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy shared module first
-COPY shared/ /app/shared/
+COPY shared /app/shared
 
 # Copy service-specific files
-COPY ${SERVICE_NAME}/requirements.txt .
+COPY ${SERVICE_DIR}/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY ${SERVICE_NAME}/ .
+COPY ${SERVICE_DIR} .
 
-# Expose port (will be different for each service)
+# Expose port
 EXPOSE 8000
 
 # Health check

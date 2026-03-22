@@ -61,6 +61,26 @@ class PortfolioItemWithAsset(PortfolioItemResponse):
     profit_loss_percentage: Optional[float] = None
 
 
+class CashOperationRequest(BaseModel):
+    """Request schema for deposit/withdraw operations"""
+    amount: float = Field(..., gt=0)
+
+
+class PortfolioTradeRequest(BaseModel):
+    """Request schema for buy/sell portfolio trade"""
+    asset_id: int = Field(..., gt=0)
+    quantity: float = Field(..., gt=0)
+    price_per_unit: float = Field(..., gt=0)
+
+
+class PortfolioTradeResponse(BaseModel):
+    """Response schema for portfolio trade operations"""
+    investor: InvestorResponse
+    holding: PortfolioItemWithAsset
+    total_amount: float
+    operation: str
+
+
 class PortfolioSummary(BaseModel):
     """Complete portfolio summary"""
     investor: InvestorResponse

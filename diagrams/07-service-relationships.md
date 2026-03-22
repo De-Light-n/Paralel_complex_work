@@ -687,7 +687,7 @@ spec:
       containers:
       - name: asset-service
         image: asset-service:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Never   
         ports:
         - containerPort: 8001
           name: http

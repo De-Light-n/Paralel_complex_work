@@ -59,7 +59,14 @@ This will start:
 - GET /investors - List all investors
 - GET /investors/{id} - Get investor by ID
 - POST /investors - Create investor
+- PUT /investors/{id} - Update investor profile
+- POST /investors/{id}/deposit - Deposit funds to investor account
+- POST /investors/{id}/withdraw - Withdraw funds from investor account
 - GET /portfolio/{investor_id} - Get portfolio holdings
+- GET /portfolio/{investor_id}/holdings - List all holdings with current prices and P/L
+- GET /portfolio/{investor_id}/holdings/{asset_id} - Get detailed holding for specific asset
+- POST /portfolio/{investor_id}/buy - Buy asset and update portfolio position
+- POST /portfolio/{investor_id}/sell - Sell asset and update portfolio position
 
 ### Analytics Service (http://localhost:8004)
 - GET /analytics/portfolio/{investor_id} - Portfolio value and P/L

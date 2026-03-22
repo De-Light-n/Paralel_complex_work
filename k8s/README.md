@@ -1,222 +1,239 @@
-# Kubernetes Deployment Guide
-# Investment Portfolio Management System
+# Kubernetes Deployment Guide (Minikube)
 
-## Prerequisites
-- Kubernetes cluster (Minikube, Docker Desktop, or cloud provider)
-- kubectl CLI tool installed
-- Docker images built for all services
+## 1. Передумови
+- Встановлений Docker Desktop.
+- Встановлений `kubectl`.
+- Встановлений `minikube`.
 
-## Build Docker Images
+Перевірка:
 
-Before deploying to Kubernetes, build all Docker images:
-
-```bash
-# Build Asset Service
-cd asset-service
-docker build -t asset-service:latest -f ../docker/Dockerfile .
-
-# Build Transaction Service  
-cd ../transaction-service
-docker build -t transaction-service:latest -f ../docker/Dockerfile .
-
-# Build Portfolio Service
-cd ../portfolio-service
-docker build -t portfolio-service:latest -f ../docker/Dockerfile .
-
-# Build Analytics Service
-cd ../analytics-service
-docker build -t analytics-service:latest -f ../docker/Dockerfile .
+```powershell
+kubectl version --client
+minikube version
 ```
 
-## Deploy to Kubernetes
+## 2. Встановлення Minikube на Windows
+Якщо Minikube відсутній, встановіть одним із способів:
 
-### Option 1: Deploy All at Once
-
-```bash
-# From the project root
-kubectl apply -f k8s/
+```powershell
+winget install Kubernetes.minikube
 ```
 
-### Option 2: Deploy Step by Step
+або
 
-```bash
-# 1. Deploy database and cache
+```powershell
+choco install minikube -y
+```
+
+Після інсталяції перезапустіть термінал.
+
+Якщо команда `minikube` не знаходиться після інсталяції:
+
+```powershell
+where.exe minikube
+```
+
+Якщо шлях не знайдено, закрийте VS Code і відкрийте знову, або додайте шлях до `minikube.exe` у змінну середовища `Path` вручну.
+
+Тимчасовий запуск за повним шляхом (приклад):
+
+```powershell
+& "C:\Program Files\Kubernetes\Minikube\minikube.exe" version
+```
+
+## 3. Підйом локального Kubernetes-кластера
+
+```powershell
+minikube start --driver=docker --cpus=4 --memory=8192
+kubectl config current-context
+kubectl get nodes
+```
+
+Очікування: `STATUS=Ready` для вузла `minikube`.
+
+## 4. Збірка образів у середовищі Minikube
+Щоб Kubernetes бачив локальні образи без зовнішнього registry:
+
+```powershell
+minikube -p minikube docker-env --shell powershell | Invoke-Expression
+
+cd <project-root>
+docker build -f docker/Dockerfile --build-arg SERVICE_DIR=asset-service -t asset-service:latest .
+docker build -f docker/Dockerfile --build-arg SERVICE_DIR=transaction-service -t transaction-service:latest .
+docker build -f docker/Dockerfile --build-arg SERVICE_DIR=portfolio-service -t portfolio-service:latest .
+docker build -f docker/Dockerfile --build-arg SERVICE_DIR=analytics-service -t analytics-service:latest .
+```
+
+## 5. Розгортання ресурсів Kubernetes
+У каталозі `k8s` уже підготовлено:
+- Deployment для кожного мікросервісу.
+- Service (ClusterIP) для міжсервісного доступу.
+- Deployment для Redis і PostgreSQL.
+- PVC для PostgreSQL.
+
+Застосування маніфестів:
+
+```powershell
+cd <project-root>
 kubectl apply -f k8s/postgres.yaml
 kubectl apply -f k8s/redis.yaml
 
-# Wait for PostgreSQL and Redis to be ready
-kubectl wait --for=condition=ready pod -l app=postgres --timeout=120s
-kubectl wait --for=condition=ready pod -l app=redis --timeout=60s
+kubectl wait --for=condition=available deployment/postgres --timeout=180s
+kubectl wait --for=condition=available deployment/redis --timeout=120s
 
-# 2. Deploy Asset Service (needs Redis)
 kubectl apply -f k8s/asset-service-configmap.yaml
 kubectl apply -f k8s/asset-service-deployment.yaml
 kubectl apply -f k8s/asset-service-service.yaml
-
-# Wait for Asset Service
-kubectl wait --for=condition=ready pod -l app=asset-service --timeout=120s
-
-# 3. Deploy Portfolio Service
 kubectl apply -f k8s/portfolio-service.yaml
-
-# Wait for Portfolio Service
-kubectl wait --for=condition=ready pod -l app=portfolio-service --timeout=120s
-
-# 4. Deploy Transaction Service (depends on Asset and Portfolio)
 kubectl apply -f k8s/transaction-service.yaml
-
-# Wait for Transaction Service
-kubectl wait --for=condition=ready pod -l app=transaction-service --timeout=120s
-
-# 5. Deploy Analytics Service (depends on all others)
 kubectl apply -f k8s/analytics-service.yaml
 ```
 
-## Verify Deployment
+Перевірка стану:
 
-```bash
-# Check all pods are running
-kubectl get pods
-
-# Check services
-kubectl get services
-
-# Check deployments
+```powershell
 kubectl get deployments
-
-# View logs for a specific service
-kubectl logs -l app=asset-service --tail=50
-kubectl logs -l app=transaction-service --tail=50
-kubectl logs -l app=portfolio-service --tail=50
-kubectl logs -l app=analytics-service --tail=50
+kubectl get pods -o wide
+kubectl get services
 ```
 
-## Access Services
+## 6. Доступність сервісів і міжсервісна взаємодія
+Для локального тестування використовуйте port-forward:
 
-### Port Forwarding (for local testing)
-
-```bash
-# Asset Service
+```powershell
 kubectl port-forward service/asset-service 8001:8000
-
-# Transaction Service
-kubectl port-forward service/transaction-service 8002:8000
-
-# Portfolio Service
 kubectl port-forward service/portfolio-service 8003:8000
-
-# Analytics Service
+kubectl port-forward service/transaction-service 8002:8000
 kubectl port-forward service/analytics-service 8004:8000
 ```
 
-Now access services at:
-- Asset Service: http://localhost:8001
-- Transaction Service: http://localhost:8002
-- Portfolio Service: http://localhost:8003
-- Analytics Service: http://localhost:8004
+Базові перевірки:
 
-## Scaling
-
-Lab #6 Requirement: Services are deployed with 2 replicas by default.
-
-To scale manually:
-```bash
-kubectl scale deployment asset-service --replicas=3
-kubectl scale deployment transaction-service --replicas=3
-kubectl scale deployment portfolio-service --replicas=3
-kubectl scale deployment analytics-service --replicas=3
+```powershell
+curl http://localhost:8001/health
+curl http://localhost:8003/health
+curl http://localhost:8002/health
+curl http://localhost:8004/health
 ```
 
-## Rolling Updates
+## 7. Перевірка Redis-підключення
+Оскільки кеш інтегровано в `asset-service`, перевіряємо запит читання двічі та дивимось логи:
 
-Lab #6 Requirement: All services support rolling updates.
+```powershell
+curl http://localhost:8001/assets/1
+curl http://localhost:8001/assets/1
+kubectl logs -l app=asset-service --tail=100
+```
 
-To update a service:
-```bash
-# Build new image with tag
-docker build -t asset-service:v2 -f docker/Dockerfile ./asset-service
+У логах має з’явитися `Cache MISS` на першому виклику і `Cache HIT` на повторному.
 
-# Update deployment
+## 8. Масштабування і балансування навантаження
+За замовчуванням сервіси в маніфестах мають 2 репліки. Для демонстрації масштабування:
+
+```powershell
+kubectl scale deployment asset-service --replicas=4
+kubectl get pods -l app=asset-service
+kubectl get endpoints asset-service
+```
+
+Перевірка балансування: зробіть серію запитів до `service/asset-service` і перевірте, що запити обробляються різними pod (за логами кількох pod).
+
+## 9. Перевірка самовідновлення після видалення Pod
+
+```powershell
+kubectl get pods -l app=asset-service
+kubectl delete pod <one-asset-pod-name>
+kubectl get pods -l app=asset-service -w
+```
+
+Очікування: Deployment автоматично створює новий pod, а кількість реплік повертається до заданого значення.
+
+## 10. Rolling Update сервісу
+
+```powershell
+# Приклад нового тегу
+docker build -f docker/Dockerfile --build-arg SERVICE_DIR=asset-service -t asset-service:v2 .
+
 kubectl set image deployment/asset-service asset-service=asset-service:v2
-
-# Watch rollout
 kubectl rollout status deployment/asset-service
+kubectl rollout history deployment/asset-service
 ```
 
-## Troubleshooting
+За потреби відкат:
 
-```bash
-# Describe a pod
+```powershell
+kubectl rollout undo deployment/asset-service
+```
+
+## 11. Демонстраційний сценарій для захисту
+1. Показати `kubectl get deployments,pods,svc`.
+2. Показати 2+ репліки `asset-service`.
+3. Через port-forward викликати `/health` та `GET /assets/{id}` двічі.
+4. Показати в логах cache miss/hit.
+5. Збільшити репліки `asset-service` до 4.
+6. Видалити один pod і показати автозаміщення.
+7. Запустити rolling update до нового тегу й показати `rollout status`.
+
+## 12. Щоденне керування Minikube
+
+Старт/стоп/стан кластера:
+
+```powershell
+minikube start --driver=docker
+minikube status
+minikube stop
+minikube delete
+```
+
+Робота з профілями Minikube:
+
+```powershell
+minikube profile list
+minikube start -p lab-k8s --driver=docker
+minikube profile lab-k8s
+```
+
+Корисні діагностичні команди:
+
+```powershell
+kubectl get nodes
+kubectl get pods -A
+kubectl get events --sort-by=.metadata.creationTimestamp
 kubectl describe pod <pod-name>
-
-# Get logs
 kubectl logs <pod-name>
-
-# Execute command in pod
-kubectl exec -it <pod-name> -- /bin/sh
-
-# Check events
-kubectl get events --sort-by='.lastTimestamp'
+minikube logs
 ```
 
-## Clean Up
+Доступ до Kubernetes Dashboard:
 
-```bash
-# Delete all resources
+```powershell
+minikube dashboard
+```
+
+Доступ до сервісу без ручного port-forward:
+
+```powershell
+minikube service asset-service --url
+```
+
+Очищення тільки застосунку (без видалення кластера):
+
+```powershell
 kubectl delete -f k8s/
-
-# Or delete specific resources
-kubectl delete deployment --all
-kubectl delete service --all
-kubectl delete pvc --all
+kubectl get all
 ```
 
-## Architecture Overview
+## 13. Команди очищення
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  Kubernetes Cluster                 │
-│                                                     │
-│  ┌──────────────┐  ┌──────────────┐               │
-│  │  PostgreSQL  │  │    Redis     │               │
-│  │  (Database)  │  │   (Cache)    │               │
-│  └──────┬───────┘  └──────┬───────┘               │
-│         │                  │                        │
-│  ┌──────┴─────────────────┴───────┐               │
-│  │                                  │               │
-│  │  ┌────────────┐  ┌────────────┐│               │
-│  │  │   Asset    │  │ Portfolio  ││               │
-│  │  │  Service   │  │  Service   ││               │
-│  │  │ (2 pods)   │  │ (2 pods)   ││               │
-│  │  └──────┬─────┘  └──────┬─────┘│               │
-│  │         │                │       │               │
-│  │  ┌──────┴────────────────┴─────┐│               │
-│  │  │    Transaction Service      ││               │
-│  │  │        (2 pods)              ││               │
-│  │  └──────┬──────────────────────┘│               │
-│  │         │                        │               │
-│  │  ┌──────┴──────────┐            │               │
-│  │  │   Analytics     │            │               │
-│  │  │    Service      │            │               │
-│  │  │   (2 pods)      │            │               │
-│  │  └─────────────────┘            │               │
-│  └──────────────────────────────────┘               │
-└─────────────────────────────────────────────────────┘
+```powershell
+kubectl delete -f k8s/
+minikube stop
 ```
 
-## Lab Requirements Compliance
+Для повного скидання даних PostgreSQL у Minikube:
 
-### Lab #6 Requirements:
-✅ **Kubernetes Deployment**: All services deployed as Deployments
-✅ **Replicas**: 2 replicas per service for high availability
-✅ **Rolling Updates**: RollingUpdate strategy configured
-✅ **Health Checks**: Liveness and readiness probes
-✅ **Service Discovery**: ClusterIP services for inter-service communication
-✅ **Resource Management**: CPU and memory limits/requests defined
-✅ **Persistent Storage**: PVC for PostgreSQL data
+```powershell
+kubectl delete pvc postgres-pvc
+```
 
-### Architecture Pattern:
-✅ **Microservices**: Each service independent
-✅ **Database per Service**: Separate databases for each service
-✅ **Service Communication**: HTTP/REST between services
-✅ **Caching**: Redis for Asset Service
+Важливо: ініціалізаційний SQL для `asset_db`, `transaction_db`, `portfolio_db` виконується лише на першому старті PostgreSQL-контейнера (коли volume порожній).

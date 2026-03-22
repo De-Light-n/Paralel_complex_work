@@ -1,3 +1,16 @@
+# PostgreSQL initialization script for database-per-service pattern
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-sql
+  labels:
+    app: postgres
+data:
+  init-db.sql: |
+    CREATE DATABASE asset_db;
+    CREATE DATABASE transaction_db;
+    CREATE DATABASE portfolio_db;
+---
 # PostgreSQL Database - Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -33,6 +46,9 @@ spec:
         volumeMounts:
         - name: postgres-storage
           mountPath: /var/lib/postgresql/data
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d/init-db.sql
+          subPath: init-db.sql
         resources:
           requests:
             memory: "256Mi"
@@ -52,6 +68,9 @@ spec:
       - name: postgres-storage
         persistentVolumeClaim:
           claimName: postgres-pvc
+      - name: postgres-init
+        configMap:
+          name: postgres-init-sql
 ---
 # PostgreSQL Service
 apiVersion: v1

@@ -19,9 +19,12 @@ from schemas import (
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
+async def get_db_stub():
+    """Stub for db session"""
+    pass
 
 # Dependency injection
-async def get_transaction_service(db: AsyncSession = Depends()) -> TransactionService:
+async def get_transaction_service(db: AsyncSession = Depends(get_db_stub)) -> TransactionService:
     """
     Dependency for injecting TransactionService
     This will be configured in main.py

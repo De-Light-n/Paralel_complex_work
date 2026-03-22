@@ -25,7 +25,7 @@ spec:
       containers:
       - name: analytics-service
         image: analytics-service:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Never   
         ports:
         - containerPort: 8000
           name: http
